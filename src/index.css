@@ -91,6 +91,15 @@ body {
   box-sizing: border-box;
 }
 
+/* Le body interdit la sélection ; les champs de saisie, eux, en ont besoin —
+   sans ça on ne peut ni sélectionner ni corriger ce qu'on tape. */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+  font-family: inherit;
+}
+
 /* Le plateau, lui, doit recevoir les swipes bruts : aucun geste du navigateur
    ne doit les intercepter. À poser sur le conteneur du <canvas>. */
 .hebi-board,

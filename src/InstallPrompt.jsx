@@ -80,8 +80,9 @@ export default function InstallPrompt() {
   if (!deferred && !showIOSHint) return null
 
   return (
+    // z-30 : le classement et la saisie du nom doivent passer PAR-DESSUS.
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center p-3"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center p-3"
       style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
     >
       <div className="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-2xl border border-white/10 bg-[#14141d]/95 px-4 py-3 shadow-2xl backdrop-blur">

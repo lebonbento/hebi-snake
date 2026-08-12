@@ -41,8 +41,11 @@ export default defineConfig({
         // Ce motif ratisse tout dist/, y compris ce qui vient de public/ :
         // inutile d'ajouter includeAssets, ça ne ferait que des doublons.
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // Aucune route serveur : n'importe quelle URL retombe sur l'app.
+        // N'importe quelle URL retombe sur l'app...
         navigateFallback: '/index.html',
+        // ...SAUF /api, sinon le service worker sert l'index HTML à la place du
+        // JSON du classement et tout casse silencieusement.
+        navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
       },
     }),

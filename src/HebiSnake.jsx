@@ -1,4 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import Classement from "./Classement.jsx";
+import SaisieNom from "./SaisieNom.jsx";
+import {
+  envoyerScore,
+  lireClassement,
+  lireCompte,
+  oublierCompte,
+  scoreEnAttente,
+  viderFile,
+} from "./api.js";
+
+const TAILLE_CLASSEMENT = 20;
 
 /* ── HEBI 蛇 — le snake franco-japonais ──
    Swipe pour diriger · flèches / ZQSD · espace = pause
@@ -22,6 +34,16 @@ export default function HebiSnake() {
   const [best, setBest] = useState(0);
   const [newBest, setNewBest] = useState(false);
   const [muted, setMuted] = useState(false);
+
+  // Classement
+  const [compte, setCompte] = useState(null);
+  const [mondial, setMondial] = useState(0);
+  const [lignes, setLignes] = useState([]);
+  const [chargeClassement, setChargeClassement] = useState(true);
+  const [erreurClassement, setErreurClassement] = useState(false);
+  const [voirClassement, setVoirClassement] = useState(false);
+  const [demandeNom, setDemandeNom] = useState(false);
+  const [rang, setRang] = useState(null);
 
   // état du jeu en refs (boucle canvas sans re-render)
   const phaseRef = useRef("idle");
@@ -221,6 +243,88 @@ export default function HebiSnake() {
     } catch {}
   }, []);
 
+  /* ── classement ──
+     Tout ce qui suit peut échouer sans conséquence : le jeu tourne pareil
+     hors-ligne, seul le tableau des scores reste vide. */
+
+  const rafraichirClassement = useCallback(async () => {
+    try {
+      const { classement, mondial: record } = await lireClassement();
+      setLignes(classement);
+      setMondial(record);
+      setErreurClassement(false);
+    } catch {
+      setErreurClassement(true);
+    } finally {
+      setChargeClassement(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setCompte(lireCompte());
+    rafraichirClassement();
+    // Un score fait dans le métro part dès que le réseau revient.
+    if (scoreEnAttente()) viderFile().then((j) => j && appliqueJoueur(j));
+    const auRetour = () => viderFile().then((j) => j && appliqueJoueur(j));
+    window.addEventListener("online", auRetour);
+    return () => window.removeEventListener("online", auRetour);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const appliqueJoueur = (joueur) => {
+    if (!joueur) return;
+    // Le serveur fait autorité : il connaît aussi les parties des autres appareils.
+    if (joueur.record > bestRef.current) {
+      bestRef.current = joueur.record;
+      setBest(joueur.record);
+      try {
+        localStorage.setItem("hebi-best", String(joueur.record));
+      } catch {}
+    }
+    if (joueur.rang) setRang(joueur.rang);
+  };
+
+  /** Le score entre-t-il au tableau ? Sert à ne demander le nom que si ça vaut le coup. */
+  const entreAuClassement = (s) =>
+    s > 0 &&
+    (lignes.length < TAILLE_CLASSEMENT || s > lignes[lignes.length - 1].record);
+
+  useEffect(() => {
+    if (phase !== "over") return;
+    const s = scoreRef.current;
+    if (s <= 0) return;
+
+    let abandonne = false;
+    (async () => {
+      if (lireCompte()) {
+        const joueur = await envoyerScore(s);
+        if (abandonne) return;
+        appliqueJoueur(joueur);
+        rafraichirClassement();
+      } else if (entreAuClassement(s)) {
+        setDemandeNom(true);
+      }
+    })();
+    return () => {
+      abandonne = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  const nomValide = async (joueur) => {
+    setCompte(lireCompte());
+    setDemandeNom(false);
+    appliqueJoueur(joueur);
+    appliqueJoueur(await envoyerScore(scoreRef.current));
+    rafraichirClassement();
+  };
+
+  const ouvrirClassement = () => {
+    if (phaseRef.current === "play") pauseGame();
+    setVoirClassement(true);
+    rafraichirClassement();
+  };
+
   /* ── plateau visible dès l'accueil ── */
   useEffect(() => {
     reset();
@@ -231,6 +335,10 @@ export default function HebiSnake() {
   /* ── clavier : flèches, ZQSD, WASD, espace, entrée ── */
   useEffect(() => {
     const onKey = (e) => {
+      // Quand on tape son nom, Z/Q/S/D sont des LETTRES, pas des directions.
+      const cible = e.target;
+      if (cible && (cible.tagName === "INPUT" || cible.tagName === "TEXTAREA")) return;
+
       const k = e.key.toLowerCase();
       const map = {
         arrowup: { x: 0, y: -1 },
@@ -483,12 +591,36 @@ export default function HebiSnake() {
               <div style={{ fontFamily: px, fontSize: 16, letterSpacing: 2, color: "#f1f5f9" }}>
                 HEBI
               </div>
-              <div className="text-xs" style={{ color: "#7c8299" }}>
-                « hé-bi » · le snake franco-japonais
-              </div>
+              {compte ? (
+                <button
+                  onClick={() => {
+                    oublierCompte();
+                    setCompte(null);
+                    setRang(null);
+                  }}
+                  title="Se déconnecter de ce nom"
+                  className="text-xs uppercase active:opacity-60"
+                  style={{ color: "#a7f3d0" }}
+                >
+                  {compte.pseudo}
+                  {rang ? ` · ${rang}ᵉ` : ""}
+                </button>
+              ) : (
+                <div className="text-xs" style={{ color: "#7c8299" }}>
+                  « hé-bi » · le snake franco-japonais
+                </div>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              aria-label="Classement"
+              onClick={ouvrirClassement}
+              className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition"
+              style={iconBtn}
+            >
+              🏆
+            </button>
             <button
               aria-label={muted ? "Activer le son" : "Couper le son"}
               onClick={toggleMute}
@@ -510,30 +642,26 @@ export default function HebiSnake() {
           </div>
         </div>
 
-        {/* scores */}
-        <div className="w-full flex gap-3 mb-3 shrink-0">
-          <div
-            className="flex-1 rounded-xl px-3 py-2"
-            style={{ background: "#15151f", border: "1px solid #232337" }}
-          >
-            <div style={{ fontFamily: px, fontSize: 7, color: "#7c8299", letterSpacing: 1 }}>
-              SCORE
+        {/* scores : le tien, et celui à battre */}
+        <div className="w-full flex gap-2 mb-3 shrink-0">
+          {[
+            { titre: "SCORE", valeur: score, couleur: "#a7f3d0" },
+            { titre: "RECORD", valeur: best, couleur: "#fbbf24" },
+            { titre: "MONDIAL", valeur: mondial, couleur: "#f87171" },
+          ].map(({ titre, valeur, couleur }) => (
+            <div
+              key={titre}
+              className="flex-1 min-w-0 rounded-xl px-2 py-2"
+              style={{ background: "#15151f", border: "1px solid #232337" }}
+            >
+              <div style={{ fontFamily: px, fontSize: 6, color: "#7c8299", letterSpacing: 1 }}>
+                {titre}
+              </div>
+              <div style={{ fontFamily: px, fontSize: 14, color: couleur, marginTop: 6 }}>
+                {valeur}
+              </div>
             </div>
-            <div style={{ fontFamily: px, fontSize: 16, color: "#a7f3d0", marginTop: 6 }}>
-              {score}
-            </div>
-          </div>
-          <div
-            className="flex-1 rounded-xl px-3 py-2"
-            style={{ background: "#15151f", border: "1px solid #232337" }}
-          >
-            <div style={{ fontFamily: px, fontSize: 7, color: "#7c8299", letterSpacing: 1 }}>
-              RECORD
-            </div>
-            <div style={{ fontFamily: px, fontSize: 16, color: "#fbbf24", marginTop: 6 }}>
-              {best}
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* plateau — flex-1 : il prend la place qui reste, et pas un pixel de plus */}
@@ -550,7 +678,7 @@ export default function HebiSnake() {
             className={`block rounded-2xl ${phase === "over" ? "hebi-shake" : ""}`}
           />
 
-          {phase !== "play" && (
+          {phase !== "play" && !demandeNom && (
             <div className="absolute inset-0 flex items-center justify-center">
               <div
                 className="rounded-2xl px-6 py-6 text-center backdrop-blur-sm flex flex-col items-center gap-4"
@@ -589,7 +717,7 @@ export default function HebiSnake() {
                     </button>
                   </>
                 )}
-                {phase === "over" && (
+                {phase === "over" && !demandeNom && (
                   <>
                     <div style={{ fontFamily: px, fontSize: 13, color: "#f87171" }}>
                       GAME OVER
@@ -628,6 +756,37 @@ export default function HebiSnake() {
         {/* vagues seigaiha */}
         <div className="w-full h-12 mt-5 rounded-xl overflow-hidden shrink-0" style={seigaiha} />
       </div>
+
+      {/* « ENTREZ VOTRE NOM » : plein écran, parce que le formulaire est plus
+          haut que le plateau sur un petit téléphone, clavier ouvert en plus. */}
+      {demandeNom && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto bg-[#0a0a10]/97 backdrop-blur-sm"
+          style={{
+            paddingTop: "env(safe-area-inset-top)",
+            paddingBottom: "env(safe-area-inset-bottom)",
+          }}
+        >
+          <div className="flex min-h-full items-center justify-center px-5 py-8">
+            <SaisieNom
+              score={score}
+              rang={entreAuClassement(score) ? null : rang}
+              onFini={nomValide}
+              onAnnule={() => setDemandeNom(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {voirClassement && (
+        <Classement
+          lignes={lignes}
+          moi={compte?.pseudo}
+          chargement={chargeClassement}
+          erreur={erreurClassement}
+          onFermer={() => setVoirClassement(false)}
+        />
+      )}
     </div>
   );
 }
