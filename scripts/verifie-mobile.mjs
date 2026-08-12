@@ -5,6 +5,10 @@
  *
  *   npm run build && npm run verifie
  *
+ * On peut aussi viser une URL déjà en ligne, sans rien builder :
+ *
+ *   npm run verifie https://hebi-snake.vercel.app
+ *
  * Les captures atterrissent dans .captures/ (ignoré par git) — et il faut LES
  * REGARDER : un contrôle vert ne dit rien sur ce que ça donne à l'œil.
  */
@@ -17,7 +21,9 @@ import { chromium, devices } from 'playwright'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const shots = resolve(root, '.captures')
 const PORT = 4173
-const URL = `http://localhost:${PORT}/`
+// Sans argument, on sert dist/ en local ; avec une URL, on contrôle la vraie prod.
+const cible = process.argv[2]
+const URL = cible ? (cible.endsWith('/') ? cible : cible + '/') : `http://localhost:${PORT}/`
 
 const ECRANS = [
   { nom: 'iphone-se', ...devices['iPhone SE'] },
@@ -47,10 +53,13 @@ async function attendServeur(url, essais = 60) {
 
 mkdirSync(shots, { recursive: true })
 
-const serveur = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], {
-  cwd: root,
-  stdio: 'ignore',
-})
+const serveur = cible
+  ? null
+  : spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], {
+      cwd: root,
+      stdio: 'ignore',
+    })
+console.log(`Cible : ${URL}`)
 
 const navigateur = await chromium.launch()
 
@@ -130,7 +139,7 @@ try {
   }
 } finally {
   await navigateur.close()
-  serveur.kill()
+  serveur?.kill()
 }
 
 console.log(

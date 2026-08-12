@@ -1,5 +1,7 @@
 # HEBI 蛇
 
+**En ligne : https://hebi-snake-lebonbentos-projects.vercel.app**
+
 Snake franco-japonais, installable sur iPhone et Android, **jouable hors-ligne**.
 Grille 17×17, canvas interpolé à 60 fps, swipes enchaînables, sons WebAudio synthétiques.
 
@@ -38,20 +40,25 @@ dépend d'aucune police installée.
 
 ## Déployer
 
-À faire une fois : importer `lebonbento/hebi-snake` depuis
-[vercel.com/new](https://vercel.com/new). Vite est détecté tout seul, aucun
-réglage à changer. Ensuite chaque push sur `main` déploie en production :
+Le dépôt est relié au projet Vercel `hebi-snake` : chaque push sur `main`
+déploie en production.
 
 ```bash
 git push
 ```
+
+⚠️ La protection « Vercel Authentication » est **désactivée** sur ce projet.
+C'est indispensable : activée (c'est le défaut sur les nouveaux projets), elle
+renvoie un 302 vers la page de connexion Vercel pour tout le monde, et l'app
+devient impossible à installer sur un téléphone.
 
 ## Contrôles
 
 ```bash
 npm run build      # doit passer sans erreur ni warning
 npm run lint
-npm run verifie    # Playwright : iPhone SE + grand écran
+npm run verifie    # Playwright : iPhone SE + grand écran, sur dist/
+npm run verifie https://hebi-snake-lebonbentos-projects.vercel.app   # sur la prod
 ```
 
 Audit Lighthouse (v11, mobile) : **PWA 100**, performance 99, bonnes pratiques 100.
