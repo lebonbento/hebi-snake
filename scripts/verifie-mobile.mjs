@@ -30,6 +30,7 @@ const ko = (msg) => {
   console.log(`  ✗ ${msg}`)
 }
 const ok = (msg) => console.log(`  ✓ ${msg}`)
+const verifie = (condition, msgOk, msgKo) => (condition ? ok(msgOk) : ko(msgKo))
 
 async function attendServeur(url, essais = 60) {
   for (let i = 0; i < essais; i++) {
@@ -74,12 +75,16 @@ try {
         horizontal: e.scrollWidth - e.clientWidth,
       }
     })
-    debord.vertical <= 1
-      ? ok('aucun scroll vertical')
-      : ko(`la page dépasse de ${debord.vertical}px en hauteur`)
-    debord.horizontal <= 1
-      ? ok('aucun scroll horizontal')
-      : ko(`la page dépasse de ${debord.horizontal}px en largeur`)
+    verifie(
+      debord.vertical <= 1,
+      'aucun scroll vertical',
+      `la page dépasse de ${debord.vertical}px en hauteur`,
+    )
+    verifie(
+      debord.horizontal <= 1,
+      'aucun scroll horizontal',
+      `la page dépasse de ${debord.horizontal}px en largeur`,
+    )
 
     // 2. Le plateau, s'il est là, doit tenir entièrement dans la fenêtre.
     const plateau = await page.evaluate(() => {
@@ -96,9 +101,7 @@ try {
         plateau.left >= -1 &&
         plateau.bottom <= device.viewport.height + 1 &&
         plateau.right <= device.viewport.width + 1
-      dedans
-        ? ok('plateau entièrement visible')
-        : ko(`plateau rogné : ${JSON.stringify(plateau)}`)
+      verifie(dedans, 'plateau entièrement visible', `plateau rogné : ${JSON.stringify(plateau)}`)
     }
 
     await page.screenshot({ path: resolve(shots, `${nom}.png`) })
@@ -109,7 +112,7 @@ try {
     try {
       await page.reload({ waitUntil: 'load' })
       const vivant = await page.evaluate(() => document.getElementById('root')?.children.length > 0)
-      vivant ? ok('rechargement hors-ligne') : ko('écran vide hors-ligne')
+      verifie(vivant, 'rechargement hors-ligne', 'écran vide hors-ligne')
     } catch (e) {
       ko(`rechargement hors-ligne impossible : ${e.message}`)
     }
@@ -117,9 +120,11 @@ try {
 
     // 4. Aucune requête vers l'extérieur (Google Fonts en tête).
     const externes = requetesReseau.filter((u) => !u.startsWith(URL) && !u.startsWith('data:'))
-    externes.length === 0
-      ? ok('aucune requête externe')
-      : ko(`requêtes externes : ${[...new Set(externes)].join(', ')}`)
+    verifie(
+      externes.length === 0,
+      'aucune requête externe',
+      `requêtes externes : ${[...new Set(externes)].join(', ')}`,
+    )
 
     await contexte.close()
   }
