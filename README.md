@@ -1,11 +1,13 @@
 # HEBI 蛇
 
-**En ligne : https://hebi-snake-lebonbentos-projects.vercel.app**
+**En ligne : https://hebi-snake.vercel.app**
 
 Snake franco-japonais, installable sur iPhone et Android, **jouable hors-ligne**.
 Grille 17×17, canvas interpolé à 60 fps, swipes enchaînables, sons WebAudio synthétiques.
 
-Aucun serveur, aucune base de données : le record vit dans le `localStorage` du téléphone.
+Le jeu lui-même ne dépend de rien : ton record vit dans le `localStorage` du
+téléphone et la partie tourne en mode avion. Seul le **classement mondial**
+parle à un serveur, et son absence n'empêche jamais de jouer.
 
 ## Lancer en local
 
@@ -115,15 +117,24 @@ Le mode hors-ligne, lui, n'est pas vérifié par Lighthouse mais par
 - Les polices (Press Start 2P, Space Grotesk) sont **self-hostées** dans
   `public/fonts`, pas chargées depuis Google Fonts.
 - Le service worker précache **tout** : HTML, JS, CSS, polices, icônes.
-- Après la première visite, l'app ne fait plus une seule requête réseau.
+- Après la première visite, **jouer** ne déclenche plus aucune requête. Les seuls
+  appels réseau vont à `/api`, pour le classement, et ils échouent sans bruit.
 
 ## Structure
 
 ```
+api/classement.js        GET  : les 20 meilleurs + le record mondial
+api/compte.js            POST : créer ou retrouver un pseudo
+api/score.js             POST : enregistrer un score
+api/_lib/logique.js      validation + requêtes (le « _ » exclut le dossier des routes)
+api/_lib/schema.sql      la table, et les contraintes qui tiennent les scores
+api/_lib/db.js           connexion Neon, et la couture qui permet de tester en local
 public/fonts/            polices woff2 (latin + latin-ext)
 public/icons/            PNG générés par npm run icons
-scripts/generate-icons.mjs
 src/HebiSnake.jsx        le jeu
+src/Classement.jsx       le tableau des meilleurs scores
+src/SaisieNom.jsx        l'écran « ENTREZ VOTRE NOM »
+src/api.js               client du classement + file d'attente hors-ligne
 src/InstallPrompt.jsx    encart « Installer l'app » (Android) / geste iOS
 src/index.css            Tailwind, @font-face, safe-areas, blocage du scroll
 vite.config.js           React + Tailwind v4 + vite-plugin-pwa (manifest inclus)
