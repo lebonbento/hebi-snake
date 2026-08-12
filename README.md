@@ -38,14 +38,28 @@ dépend d'aucune police installée.
 
 ## Déployer
 
-Le projet est lié à Vercel : tout push sur `main` déclenche un déploiement de
-production.
+À faire une fois : importer `lebonbento/hebi-snake` depuis
+[vercel.com/new](https://vercel.com/new). Vite est détecté tout seul, aucun
+réglage à changer. Ensuite chaque push sur `main` déploie en production :
 
 ```bash
 git push
 ```
 
-Un déploiement manuel reste possible avec `npx vercel --prod`.
+## Contrôles
+
+```bash
+npm run build      # doit passer sans erreur ni warning
+npm run lint
+npm run verifie    # Playwright : iPhone SE + grand écran
+```
+
+Audit Lighthouse (v11, mobile) : **PWA 100**, performance 99, bonnes pratiques 100.
+La v12 de Lighthouse a supprimé la catégorie PWA, il faut donc `lighthouse@11`
+pour retrouver `installable-manifest` et `maskable-icon`.
+
+Le mode hors-ligne, lui, n'est pas vérifié par Lighthouse mais par
+`npm run verifie`, qui coupe réellement le réseau et recharge la page.
 
 ## Ce qui rend le hors-ligne réel
 
