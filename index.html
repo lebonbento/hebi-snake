@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>HEBI 蛇</title>
+    <meta name="description" content="Snake franco-japonais, jouable hors-ligne." />
+
+    <!-- viewport-fit=cover : la page passe SOUS l'encoche, les safe-areas la
+         rattrapent en CSS. user-scalable=no supprime le zoom double-tap. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0b0b12" />
+    <meta name="color-scheme" content="dark" />
+
+    <!-- Plein écran une fois installée -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="HEBI" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
+    <!-- Les polices sont locales : on les précharge pour éviter le flash de
+         texte invisible (font-display: block). -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/press-start-2p-latin.woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/space-grotesk-latin.woff2"
+      crossorigin
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
