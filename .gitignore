@@ -28,3 +28,4 @@ dist-ssr
 
 # Captures du contrôle mobile
 .captures
+.env*.local

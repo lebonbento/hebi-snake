@@ -12,7 +12,8 @@
     "verifie": "node scripts/verifie-mobile.mjs",
     "test-classement": "node scripts/test-classement.mjs",
     "local": "node scripts/serveur-local.mjs",
-    "test-parcours": "node scripts/test-parcours.mjs"
+    "test-parcours": "node scripts/test-parcours.mjs",
+    "migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
