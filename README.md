@@ -120,6 +120,35 @@ Le mode hors-ligne, lui, n'est pas vérifié par Lighthouse mais par
 - Après la première visite, **jouer** ne déclenche plus aucune requête. Les seuls
   appels réseau vont à `/api`, pour le classement, et ils échouent sans bruit.
 
+## Licence et crédits
+
+Le code est sous **MIT** (voir `LICENSE`) : reprenez-le, modifiez-le, vendez-le.
+
+Le jeu ne contient **aucun son ni aucune image** : les bips sont synthétisés en
+WebAudio, la nourriture ce sont des emoji rendus par le système. Rien à créditer
+de ce côté.
+
+Trois polices, toutes sous **SIL Open Font License 1.1**. Leur licence et leur
+mention de copyright sont livrées à côté des fichiers, dans `public/fonts/` —
+c'est ce que l'OFL exige, et ça doit rester vrai si vous redistribuez le projet.
+
+| Police | Auteur | Usage |
+|---|---|---|
+| [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P) | The Press Start 2P Project Authors | titres et chiffres, le pixel des bornes |
+| [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk) | The Space Grotesk Project Authors | texte courant |
+| [Noto Sans JP](https://fonts.google.com/noto/specimen/Noto+Sans+JP) | Adobe | le tracé du kanji 蛇 des icônes en est extrait |
+
+Le kanji des icônes n'est pas un fichier de police embarqué : c'est un **contour
+vectoriel** extrait de Noto Sans JP par `scripts/generate-icons.mjs`. L'OFL
+autorise ce dérivé ; c'est à ce titre que sa licence est incluse.
+
+Le motif de vagues en bas d'écran est un **seigaiha** (青海波), motif traditionnel
+japonais, redessiné en CSS.
+
+Quant au jeu lui-même : le principe du serpent qui s'allonge remonte à *Blockade*
+(Gremlin, 1976), vingt ans avant Nokia. Des règles de jeu ne se protègent pas —
+seule une expression le peut. HEBI n'emprunte ni code, ni graphisme, ni nom.
+
 ## Structure
 
 ```
@@ -129,7 +158,7 @@ api/score.js             POST : enregistrer un score
 api/_lib/logique.js      validation + requêtes (le « _ » exclut le dossier des routes)
 api/_lib/schema.sql      la table, et les contraintes qui tiennent les scores
 api/_lib/db.js           connexion Neon, et la couture qui permet de tester en local
-public/fonts/            polices woff2 (latin + latin-ext)
+public/fonts/            polices woff2 (latin + latin-ext) + leurs licences OFL
 public/icons/            PNG générés par npm run icons
 src/HebiSnake.jsx        le jeu
 src/Classement.jsx       le tableau des meilleurs scores

@@ -1,9 +1,13 @@
 /**
  * Génère les icônes PWA à partir d'un SVG construit ici même.
  *
- * Le kanji 蛇 est un TRACÉ vectoriel (extrait de Noto Sans JP 700, licence OFL),
- * pas un <text> : l'icône ne dépend donc d'aucune police installée sur la machine
- * qui la rasterise, ni sur l'appareil qui l'affiche.
+ * Le kanji 蛇 est un TRACÉ vectoriel, pas un <text> : l'icône ne dépend donc
+ * d'aucune police installée sur la machine qui la rasterise, ni sur l'appareil
+ * qui l'affiche.
+ *
+ * Ce contour est extrait de Noto Sans JP 700 (Adobe), sous SIL Open Font
+ * License 1.1, qui autorise les dérivés à condition d'en livrer la licence :
+ * voir public/fonts/OFL-NotoSansJP.txt.
  *
  *   npm run icons
  */
