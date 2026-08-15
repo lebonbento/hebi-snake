@@ -33,6 +33,15 @@ export function baseConfiguree() {
   return Boolean(implementation || process.env.DATABASE_URL || process.env.POSTGRES_URL)
 }
 
+/**
+ * Sans HEBI_SEL, les codes seraient hachés avec le sel historique, qui est écrit
+ * en clair dans un dépôt public. Un déploiement mal configuré ne doit donc PAS
+ * servir le classement en mode dégradé : il doit refuser. Échouer fermé.
+ */
+export function selConfigure() {
+  return Boolean(process.env.HEBI_SEL)
+}
+
 /* ------------------------------------------------------------------
    Petits utilitaires HTTP communs aux trois routes
    ------------------------------------------------------------------ */
@@ -63,7 +72,7 @@ export function refuse(req, res, methode) {
     json(res, 405, { erreur: 'Méthode non autorisée.' })
     return true
   }
-  if (!baseConfiguree()) {
+  if (!baseConfiguree() || !selConfigure()) {
     json(res, 503, { erreur: 'Classement indisponible.' })
     return true
   }

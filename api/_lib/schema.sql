@@ -21,3 +21,9 @@ create table if not exists joueurs (
 
 -- Le classement, c'est cette requête et rien d'autre : l'index la rend instantanée.
 create index if not exists joueurs_record_idx on joueurs (record desc, maj_le asc);
+
+-- Un code à 4 chiffres, c'est 10 000 possibilités : sans frein, on les essaie
+-- toutes en quelques minutes. Au-delà de quelques échecs, le compte se ferme
+-- un quart d'heure, ce qui porte l'attaque complète à des centaines d'heures.
+alter table joueurs add column if not exists echecs         integer     not null default 0;
+alter table joueurs add column if not exists bloque_jusqu_a timestamptz;

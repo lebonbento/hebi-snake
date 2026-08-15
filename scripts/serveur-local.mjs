@@ -26,6 +26,10 @@ if (!existsSync(dist)) {
   process.exit(1)
 }
 
+// Les routes refusent de servir sans sel configuré (cf. api/_lib/db.js) : en
+// local on en pose un explicite, qui n'a rien à voir avec celui de production.
+process.env.HEBI_SEL ||= 'sel-de-developpement'
+
 const db = new PGlite()
 await db.exec(readFileSync(resolve(root, 'api/_lib/schema.sql'), 'utf8'))
 utiliserBase(async (text, params) => (await db.query(text, params)).rows)

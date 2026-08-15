@@ -105,7 +105,8 @@ export async function envoyerScore(score) {
     return joueur
   } catch (e) {
     // 4xx = le serveur a compris et refuse : réessayer n'y changera rien.
-    if (e.statut >= 400 && e.statut < 500) return null
+    // Sauf 429 (trop d'essais), qui est temporaire : celui-là, on le garde.
+    if (e.statut >= 400 && e.statut < 500 && e.statut !== 429) return null
     ecrire(CLE_FILE, [aEnvoyer])
     return null
   }

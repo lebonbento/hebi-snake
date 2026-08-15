@@ -10,6 +10,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PGlite } from '@electric-sql/pglite'
 import {
+  ECHECS_TOLERES,
   SCORE_MAX,
   creerCompte,
   enregistrerScore,
@@ -123,6 +124,55 @@ verifie(
   exAequo.map((l) => `${l.pseudo}:${l.record}`).join(' '),
 )
 verifie((await lireRang(requete, 'FLO')) === 1, 'les ex aequo partagent le rang 1')
+
+console.log('\n▸ bascule du sel : personne ne perd son compte')
+// Un compte créé AVANT la bascule, donc haché avec le sel historique.
+delete process.env.HEBI_SEL
+await creerCompte(requete, { pseudo: 'Ancien', norm: 'ANCIEN', code: '7777' })
+await enregistrerScore(requete, { norm: 'ANCIEN', code: '7777', score: 500 })
+const [avant] = await requete('select code_hash from joueurs where pseudo_norm = $1', ['ANCIEN'])
+
+// On bascule sur un vrai sel secret.
+process.env.HEBI_SEL = 'un-sel-secret-de-test'
+
+const migration = await retrouverCompte(requete, { norm: 'ANCIEN', code: '7777' })
+verifie(migration.ok, 'l’ancien code ouvre toujours le compte après la bascule')
+verifie(migration.migre === true, 'et il est signalé comme ré-encodé')
+verifie(migration.joueur?.record === 500, 'le record est intact', String(migration.joueur?.record))
+
+const [apres] = await requete('select code_hash from joueurs where pseudo_norm = $1', ['ANCIEN'])
+verifie(apres.code_hash !== avant.code_hash, 'le hachage stocké a bien changé')
+
+const suivante = await retrouverCompte(requete, { norm: 'ANCIEN', code: '7777' })
+verifie(suivante.ok && !suivante.migre, 'la fois d’après, plus besoin de l’ancien sel')
+verifie(
+  !(await retrouverCompte(requete, { norm: 'ANCIEN', code: '1111' })).ok,
+  'un mauvais code reste refusé après la bascule',
+)
+
+console.log('\n▸ on ne peut plus essayer les 10 000 codes')
+await creerCompte(requete, { pseudo: 'Cible', norm: 'CIBLE', code: '1234' })
+let dernier
+for (let i = 0; i < ECHECS_TOLERES; i++) {
+  dernier = await retrouverCompte(requete, { norm: 'CIBLE', code: '0000' })
+}
+verifie(dernier.code === 403, `les ${ECHECS_TOLERES} premiers essais sont de simples refus`)
+
+const apresBlocage = await retrouverCompte(requete, { norm: 'CIBLE', code: '0000' })
+verifie(apresBlocage.code === 429, 'au-delà, le compte se ferme (429)', String(apresBlocage.code))
+
+const memeAvecLeBon = await retrouverCompte(requete, { norm: 'CIBLE', code: '1234' })
+verifie(memeAvecLeBon.code === 429, 'et même le bon code est refusé pendant le blocage')
+
+const scoreBloque = await enregistrerScore(requete, { norm: 'CIBLE', code: '1234', score: 100 })
+verifie(scoreBloque.code === 429, 'un compte bloqué ne peut pas non plus écrire de score')
+
+// On rembobine l'horloge pour vérifier que le blocage se lève tout seul.
+await requete(`update joueurs set bloque_jusqu_a = now() - interval '1 minute' where pseudo_norm = $1`, [
+  'CIBLE',
+])
+const apresAttente = await retrouverCompte(requete, { norm: 'CIBLE', code: '1234' })
+verifie(apresAttente.ok, 'le blocage se lève tout seul, sans intervention')
 
 await db.close()
 
