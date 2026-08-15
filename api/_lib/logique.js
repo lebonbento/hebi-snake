@@ -1,8 +1,15 @@
 import { createHash } from 'node:crypto'
 
-// 17×17 cases, moins les 3 du serpent de départ, à 10 points la bouchée :
-// personne ne peut dépasser ça sans tricher.
-export const SCORE_MAX = (17 * 17 - 3) * 10
+/**
+ * Plafond de plausibilité.
+ *
+ * La nourriture seule ne peut rapporter que (17×17 − 3) × 10 = 2860 points :
+ * on ne peut pas manger plus de cases qu'il n'y en a. Mais les objets rares
+ * (bonus, kanji) rapportent en plus, et il peut en apparaître un par bouchée.
+ * On borne donc large — 20 000 reste un garde-fou utile contre un score envoyé
+ * à la main, sans jamais refuser une partie réellement jouée.
+ */
+export const SCORE_MAX = 20000
 
 export const TAILLE_CLASSEMENT = 20
 

@@ -15,9 +15,15 @@ create table if not exists joueurs (
   cree_le     timestamptz not null default now(),
   maj_le      timestamptz not null default now(),
 
-  constraint record_plausible check (record >= 0 and record <= 2860),
+  constraint record_plausible check (record >= 0 and record <= 20000),
   constraint pseudo_non_vide  check (length(pseudo) between 1 and 12)
 );
+
+-- Le plafond valait 2860 (la nourriture seule) avant l'arrivée des objets
+-- rares, qui rapportent en plus. Une contrainte existante ne se met pas à jour
+-- toute seule : on la remplace.
+alter table joueurs drop constraint if exists record_plausible;
+alter table joueurs add  constraint record_plausible check (record >= 0 and record <= 20000);
 
 -- Le classement, c'est cette requête et rien d'autre : l'index la rend instantanée.
 create index if not exists joueurs_record_idx on joueurs (record desc, maj_le asc);

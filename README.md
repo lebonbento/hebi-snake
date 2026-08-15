@@ -54,6 +54,28 @@ C'est indispensable : activée (c'est le défaut sur les nouveaux projets), elle
 renvoie un 302 vers la page de connexion Vercel pour tout le monde, et l'app
 devient impossible à installer sur un téléphone.
 
+## Le jeu
+
+Nourriture 🍙 = 10 points. Ça accélère à chaque bouchée, mais plus doucement
+qu'avant : le plafond de vitesse n'arrive qu'après 38 bouchées, contre 24
+auparavant — au-delà de 240 points, toute la partie se jouait à fond.
+
+Trois **objets rares** apparaissent de temps en temps, un seul à la fois. Ils
+vivent 7 secondes, clignotent de plus en plus vite sur la fin, puis s'en vont.
+
+| Objet | Effet |
+|---|---|
+| 🐢 | Fait reculer le compteur de 6 bouchées : le serpent **ralentit pour de bon**, ce n'est pas une pause |
+| ⭐ | +50 points |
+| 漢 | +20 points, et la traduction du kanji monte à l'écran comme un fantôme |
+
+Les 41 kanji sont dans `src/kanji.js` : un seul caractère chacun, parce qu'une
+case fait 15 à 20 px — 猫 y tient, ねこ non.
+
+⚠️ Tous les gains doivent rester des **multiples de 10** : l'API rejette les
+scores qui n'en sont pas. Et le plafond de plausibilité (`SCORE_MAX`) tient
+compte des objets, sinon les bons scores seraient refusés en silence.
+
 ## Le classement
 
 Un joueur = un pseudo unique + un code à 4 chiffres. Le code n'est pas un mot de
@@ -96,6 +118,7 @@ npm run build      # doit passer sans erreur ni warning
 npm run lint
 npm run verifie          # Playwright : iPhone SE + grand écran, sur dist/
 npm run verifie <url>    # ... ou sur la prod
+npm run test-objets      # vitesse, objets rares, liste de kanji
 npm run test-classement  # logique du classement sur un vrai Postgres (PGlite)
 npm run test-parcours    # parcours joueur complet : jouer → mourir → nom → tableau
 npm run local            # dist/ + les routes /api sur un Postgres en mémoire
@@ -161,6 +184,8 @@ api/_lib/db.js           connexion Neon, et la couture qui permet de tester en l
 public/fonts/            polices woff2 (latin + latin-ext) + leurs licences OFL
 public/icons/            PNG générés par npm run icons
 src/HebiSnake.jsx        le jeu
+src/objets.js            règles des objets rares et de la vitesse (pures, testables)
+src/kanji.js             les 41 kanji et leurs traductions
 src/Classement.jsx       le tableau des meilleurs scores
 src/SaisieNom.jsx        l'écran « ENTREZ VOTRE NOM »
 src/api.js               client du classement + file d'attente hors-ligne

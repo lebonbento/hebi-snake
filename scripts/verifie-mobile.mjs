@@ -26,8 +26,18 @@ const cible = process.argv[2]
 const URL = cible ? (cible.endsWith('/') ? cible : cible + '/') : `http://localhost:${PORT}/`
 
 const ECRANS = [
+  // Le 280 px n'est pas un caprice : c'est le plus petit écran encore vendu
+  // (Galaxy Fold replié). Si ça passe là, ça passe partout.
+  {
+    nom: 'tres-etroit-280',
+    viewport: { width: 280, height: 653 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 2,
+  },
   { nom: 'iphone-se', ...devices['iPhone SE'] },
   { nom: 'iphone-15-pro-max', ...devices['iPhone 14 Pro Max'] },
+  { nom: 'ipad', ...devices['iPad (gen 7)'] },
 ]
 
 let echecs = 0

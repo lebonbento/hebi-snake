@@ -11,11 +11,11 @@ import { spawn } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, devices } from 'playwright'
+import { poursuis, score as scoreDe } from './_pilote.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = 4181
 const URL = `http://localhost:${PORT}/`
-const CASES = 17
 
 let echecs = 0
 const verifie = (ok, libelle, detail = '') => {
@@ -48,33 +48,7 @@ const page = await ctx.newPage()
 try {
   await page.goto(URL, { waitUntil: 'networkidle' })
 
-  /** Position de la tête, lue au pixel : sa couleur (#bbf7d0) n'existe nulle part ailleurs. */
-  const tete = () =>
-    page.evaluate((n) => {
-      const cv = document.querySelector('canvas')
-      const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data
-      const w = cv.width
-      let sx = 0,
-        sy = 0,
-        c = 0
-      for (let i = 0; i < d.length; i += 4) {
-        if (
-          Math.abs(d[i] - 187) < 12 &&
-          Math.abs(d[i + 1] - 247) < 12 &&
-          Math.abs(d[i + 2] - 208) < 12
-        ) {
-          sx += (i / 4) % w
-          sy += Math.floor(i / 4 / w)
-          c++
-        }
-      }
-      if (!c) return null
-      const cell = cv.width / n
-      return { x: Math.floor(sx / c / cell), y: Math.floor(sy / c / cell) }
-    }, CASES)
-
-  const score = () =>
-    page.evaluate(() => Number(document.body.innerText.match(/SCORE\s+(\d+)/)?.[1] ?? 0))
+  const score = () => scoreDe(page)
   const texte = () => page.evaluate(() => document.body.innerText)
 
   console.log('\n▸ le tableau est vide au départ')
@@ -87,28 +61,8 @@ try {
   await page.getByText('JOUER').click()
   await page.waitForTimeout(300)
 
-  // Balayage en créneau : on ratisse le plateau, on finit sur la nourriture.
-  // On tourne à l'AVANT-dernière colonne, sinon on percute le mur au tour suivant.
-  let sensH = 'ArrowRight'
-  let sensV = 'ArrowDown'
-  for (let pas = 0; pas < 320; pas++) {
-    if ((await score()) > 0) break
-    const t = await tete()
-    if (!t) break
-
-    const auBord =
-      (sensH === 'ArrowRight' && t.x >= CASES - 2) || (sensH === 'ArrowLeft' && t.x <= 1)
-
-    if (auBord) {
-      if (t.y >= CASES - 2) sensV = 'ArrowUp'
-      if (t.y <= 1) sensV = 'ArrowDown'
-      await page.keyboard.press(sensV)
-      await page.waitForTimeout(175)
-      sensH = sensH === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight'
-    }
-    await page.keyboard.press(sensH)
-    await page.waitForTimeout(165)
-  }
+  // Le pilote repère ce qu'il y a à manger et fonce dessus.
+  await poursuis(page, { pas: 220, arret: async (p) => (await scoreDe(p)) >= 30 })
 
   const marque = await score()
   verifie(marque > 0, 'le serpent a mangé', `score ${marque}`)

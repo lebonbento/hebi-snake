@@ -2,6 +2,18 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Classement from "./Classement.jsx";
 import SaisieNom from "./SaisieNom.jsx";
 import {
+  BASE_SPEED,
+  BONUS_POINTS,
+  KANJI_POINTS,
+  OBJET_CHANCE,
+  choisirType,
+  creerObjet,
+  effet,
+  estExpire,
+  opacite,
+  vitessePour,
+} from "./objets.js";
+import {
   envoyerScore,
   lireClassement,
   lireCompte,
@@ -19,8 +31,6 @@ const TAILLE_CLASSEMENT = 20;
 
 const COLS = 17;
 const ROWS = 17;
-const BASE_SPEED = 160; // ms par case
-const MIN_SPEED = 65;
 const FOODS = ["🍙", "🍣", "🍡", "🍤", "🍥"];
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -55,6 +65,8 @@ export default function HebiSnake() {
   const dirRef = useRef({ x: 1, y: 0 });
   const queueRef = useRef([]);
   const foodRef = useRef({ x: 12, y: 8, icon: "🍙" });
+  const objetRef = useRef(null); // { type, x, y, icon, fr, ne_a }
+  const fantomesRef = useRef([]); // traductions qui montent puis s'effacent
   const eatenRef = useRef(0);
   const scoreRef = useRef(0);
   const speedRef = useRef(BASE_SPEED);
@@ -104,13 +116,43 @@ export default function HebiSnake() {
   };
 
   /* ── logique ── */
-  const placeFood = (snake) => {
+  /** Une case au hasard qui n'est ni sous le serpent, ni déjà occupée. */
+  const caseLibre = (snake, ...occupees) => {
     let x, y;
+    let essais = 0;
     do {
       x = (Math.random() * COLS) | 0;
       y = (Math.random() * ROWS) | 0;
-    } while (snake.some((s) => s.x === x && s.y === y));
+      essais++;
+    } while (
+      essais < 200 &&
+      (snake.some((s) => s.x === x && s.y === y) ||
+        occupees.some((o) => o && o.x === x && o.y === y))
+    );
+    return { x, y };
+  };
+
+  const placeFood = (snake) => {
+    const { x, y } = caseLibre(snake, objetRef.current);
     foodRef.current = { x, y, icon: FOODS[(Math.random() * FOODS.length) | 0] };
+  };
+
+  /**
+   * Fait apparaître un objet rare, si la place le permet. Un seul à la fois :
+   * trois objets simultanés rendraient le plateau illisible.
+   */
+  const placerObjet = (snake) => {
+    if (objetRef.current) return;
+    // Plateau presque plein : on ne va pas coincer le joueur avec un objet.
+    if (snake.length > COLS * ROWS - 12) return;
+
+    const { x, y } = caseLibre(snake, foodRef.current);
+    objetRef.current = creerObjet(choisirType(Math.random()), x, y, performance.now());
+  };
+
+  /** Une traduction qui monte depuis la case et s'efface, façon fantôme. */
+  const ajouteFantome = (texte, x, y) => {
+    fantomesRef.current.push({ texte, x, y, ne_a: performance.now() });
   };
 
   const reset = () => {
@@ -126,9 +168,15 @@ export default function HebiSnake() {
     eatenRef.current = 0;
     scoreRef.current = 0;
     speedRef.current = BASE_SPEED;
+    objetRef.current = null;
+    fantomesRef.current = [];
     setScore(0);
     setNewBest(false);
     placeFood(snakeRef.current);
+  };
+
+  const recalculeVitesse = () => {
+    speedRef.current = vitessePour(eatenRef.current);
   };
 
   const nextDir = () => {
@@ -168,6 +216,12 @@ export default function HebiSnake() {
   };
 
   const step = () => {
+    // L'objet a-t-il fini sa vie ? On le retire avant de bouger, sinon on
+    // pourrait le manger au tour même où il s'éteint.
+    if (objetRef.current && estExpire(objetRef.current, performance.now())) {
+      objetRef.current = null;
+    }
+
     const dir = nextDir();
     const body = snakeRef.current;
     prevRef.current = body.map((s) => ({ ...s }));
@@ -185,17 +239,43 @@ export default function HebiSnake() {
       return;
     }
     const ns = [{ x: nx, y: ny }, ...body];
+
+    // Seule la nourriture fait grandir le serpent ; les objets rares, non.
     if (eats) {
       eatenRef.current += 1;
       scoreRef.current += 10;
       setScore(scoreRef.current);
-      speedRef.current = Math.max(MIN_SPEED, BASE_SPEED - eatenRef.current * 4);
+      recalculeVitesse();
       placeFood(ns);
       tone(420 + eatenRef.current * 14, 660 + eatenRef.current * 14, 0.09, "square");
       vib(12);
+      if (Math.random() < OBJET_CHANCE) placerObjet(ns);
     } else {
       ns.pop();
     }
+
+    const o = objetRef.current;
+    if (o && nx === o.x && ny === o.y) {
+      objetRef.current = null;
+      const { points, bouchees, texte } = effet(o, eatenRef.current);
+
+      // La tortue rend au joueur une partie de l'accélération accumulée : la
+      // vitesse redescend pour de bon, elle n'est pas juste suspendue.
+      eatenRef.current = bouchees;
+      recalculeVitesse();
+
+      if (points) {
+        scoreRef.current += points;
+        setScore(scoreRef.current);
+      }
+      ajouteFantome(texte, o.x, o.y);
+
+      if (o.type === "tortue") tone(700, 220, 0.3, "sine", 0.06);
+      else if (o.type === "bonus") tone(660, 1320, 0.18, "triangle", 0.06);
+      else tone(520, 880, 0.22, "sine", 0.05);
+      vib(20);
+    }
+
     snakeRef.current = ns;
   };
 
@@ -446,6 +526,30 @@ export default function HebiSnake() {
       ctx.textBaseline = "middle";
       ctx.fillText(f.icon, (f.x + 0.5) * cell, (f.y + 0.56) * cell);
 
+      // objet rare : il clignote de plus en plus vite à mesure qu'il s'éteint
+      const o = objetRef.current;
+      if (o) {
+        ctx.save();
+        ctx.globalAlpha = opacite(o, now);
+        const cx = (o.x + 0.5) * cell;
+        const cy = (o.y + 0.56) * cell;
+
+        if (o.type === "kanji") {
+          // Un halo pour que le caractère ne se confonde pas avec le damier.
+          ctx.fillStyle = "rgba(34,211,238,.16)";
+          ctx.beginPath();
+          ctx.arc(cx, (o.y + 0.5) * cell, cell * 0.46, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#67e8f9";
+          ctx.font = `${cell * 0.72}px "Hiragino Sans","Yu Gothic",serif`;
+        } else {
+          ctx.font = `${cell * 0.78 * pulse}px serif`;
+        }
+        ctx.fillText(o.icon, cx, cy);
+        ctx.restore();
+      }
+
+
       // serpent interpolé
       const cur = snakeRef.current;
       if (cur.length) {
@@ -492,6 +596,30 @@ export default function HebiSnake() {
         ctx.beginPath();
         ctx.arc(h.x + fx - ex, h.y + fy - ey, cell * 0.075, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      // Les traductions qui montent, EN DERNIER : dessinées avant le serpent,
+      // elles passaient dessous et il en mangeait la première lettre.
+      const VIE_FANTOME = 1400;
+      fantomesRef.current = fantomesRef.current.filter((g) => now - g.ne_a < VIE_FANTOME);
+      for (const g of fantomesRef.current) {
+        const t = (now - g.ne_a) / VIE_FANTOME;
+        ctx.save();
+        ctx.globalAlpha = 1 - t * t; // s'efface doucement d'abord, vite à la fin
+        ctx.font = `700 ${cell * 0.62}px "Space Grotesk", system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        // Bridé sur les côtés pour ne jamais sortir du plateau.
+        const gx = Math.min(Math.max((g.x + 0.5) * cell, s * 0.2), s * 0.8);
+        const gy = (g.y + 0.4) * cell - t * cell * 1.9;
+        // Un contour sombre : lisible même quand le serpent passe dessous.
+        ctx.lineWidth = Math.max(2, cell * 0.16);
+        ctx.strokeStyle = "rgba(8,8,14,.85)";
+        ctx.lineJoin = "round";
+        ctx.strokeText(g.texte, gx, gy);
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillText(g.texte, gx, gy);
+        ctx.restore();
       }
 
       // liseré intérieur
@@ -679,9 +807,11 @@ export default function HebiSnake() {
           />
 
           {phase !== "play" && !demandeNom && (
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center justify-center p-1">
+              {/* max-h-full : sur un écran très court, la carte se replie sur
+                  elle-même plutôt que de déborder par-dessus le plateau. */}
               <div
-                className="rounded-2xl px-6 py-6 text-center backdrop-blur-sm flex flex-col items-center gap-4"
+                className="max-h-full overflow-y-auto rounded-2xl px-5 py-5 text-center backdrop-blur-sm flex flex-col items-center gap-3"
                 style={overlayBox}
               >
                 {phase === "idle" && (
@@ -689,10 +819,23 @@ export default function HebiSnake() {
                     <div style={{ fontFamily: px, fontSize: 13, color: "#f1f5f9" }}>
                       PRÊT ?
                     </div>
-                    <div className="text-sm" style={{ color: "#9aa1b8" }}>
+                    <div className="text-sm leading-relaxed" style={{ color: "#9aa1b8" }}>
                       Attrape les onigiri 🍙 = 10 pts
                       <br />
                       Ça accélère à chaque bouchée.
+                    </div>
+                    <div
+                      className="text-xs leading-relaxed"
+                      style={{ color: "#7c8299", borderTop: "1px solid #23233a", paddingTop: 10 }}
+                    >
+                      🐢 ralentit · ⭐ +{BONUS_POINTS} pts
+                      <br />
+                      <span style={{ color: "#67e8f9" }}>漢</span> +{KANJI_POINTS} pts et te dit ce
+                      qu’il veut dire
+                      <br />
+                      <span style={{ color: "#5c6178" }}>
+                        Ils clignotent puis s’en vont : fonce.
+                      </span>
                     </div>
                     <button
                       onClick={start}
