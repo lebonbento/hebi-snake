@@ -11,6 +11,7 @@ import {
   effet,
   estExpire,
   opacite,
+  resume,
   vitessePour,
 } from "./objets.js";
 import {
@@ -54,6 +55,7 @@ export default function HebiSnake() {
   const [voirClassement, setVoirClassement] = useState(false);
   const [demandeNom, setDemandeNom] = useState(false);
   const [rang, setRang] = useState(null);
+  const [appris, setAppris] = useState([]); // les kanji de la partie qui vient de finir
 
   // état du jeu en refs (boucle canvas sans re-render)
   const phaseRef = useRef("idle");
@@ -67,6 +69,7 @@ export default function HebiSnake() {
   const foodRef = useRef({ x: 12, y: 8, icon: "🍙" });
   const objetRef = useRef(null); // { type, x, y, icon, fr, ne_a }
   const fantomesRef = useRef([]); // traductions qui montent puis s'effacent
+  const kanjisRef = useRef([]); // ceux mangés dans la partie en cours
   const eatenRef = useRef(0);
   const scoreRef = useRef(0);
   const speedRef = useRef(BASE_SPEED);
@@ -170,8 +173,10 @@ export default function HebiSnake() {
     speedRef.current = BASE_SPEED;
     objetRef.current = null;
     fantomesRef.current = [];
+    kanjisRef.current = [];
     setScore(0);
     setNewBest(false);
+    setAppris([]);
     placeFood(snakeRef.current);
   };
 
@@ -202,6 +207,7 @@ export default function HebiSnake() {
 
   const die = () => {
     setPhase2("over");
+    setAppris(resume(kanjisRef.current));
     clearTimeout(timerRef.current);
     tone(300, 60, 0.4, "sawtooth", 0.06);
     vib(80);
@@ -272,7 +278,12 @@ export default function HebiSnake() {
 
       if (o.type === "tortue") tone(700, 220, 0.3, "sine", 0.06);
       else if (o.type === "bonus") tone(660, 1320, 0.18, "triangle", 0.06);
-      else tone(520, 880, 0.22, "sine", 0.05);
+      else {
+        // On le met de côté pour le récapitulatif de fin : la traduction qui
+        // monte s'efface en une seconde et demie, personne ne la retient.
+        kanjisRef.current.push({ c: o.icon, fr: o.fr });
+        tone(520, 880, 0.22, "sine", 0.05);
+      }
       vib(20);
     }
 
@@ -875,6 +886,51 @@ export default function HebiSnake() {
                     ) : (
                       <div className="text-xs" style={{ color: "#9aa1b8" }}>
                         Record : {best}
+                      </div>
+                    )}
+
+                    {appris.length > 0 && (
+                      <div
+                        className="w-full"
+                        style={{ borderTop: "1px solid #23233a", paddingTop: 12 }}
+                      >
+                        <div
+                          style={{
+                            fontFamily: px,
+                            fontSize: 8,
+                            color: "#67e8f9",
+                            letterSpacing: 1,
+                            marginBottom: 10,
+                          }}
+                        >
+                          TU AS APPRIS
+                        </div>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {appris.map((k) => (
+                            <div
+                              key={k.c}
+                              className="rounded-lg px-2 py-1 text-center"
+                              style={{ background: "#12121c", border: "1px solid #23233a" }}
+                            >
+                              <div
+                                style={{
+                                  fontSize: 20,
+                                  lineHeight: 1.2,
+                                  color: "#67e8f9",
+                                  fontFamily: "'Hiragino Sans','Yu Gothic',serif",
+                                }}
+                              >
+                                {k.c}
+                              </div>
+                              <div className="text-xs" style={{ color: "#c7cddb" }}>
+                                {k.fr}
+                                {k.fois > 1 && (
+                                  <span style={{ color: "#5c6178" }}> ×{k.fois}</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                     <button

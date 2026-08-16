@@ -18,6 +18,7 @@ import {
   effet,
   estExpire,
   opacite,
+  resume,
   vitessePour,
 } from '../src/objets.js'
 
@@ -122,6 +123,25 @@ verifie(
   KANJI.some((k) => k.c === '蛇'),
   'le serpent est dans la liste, forcément',
 )
+
+console.log('\n▸ le récapitulatif de fin de partie')
+verifie(resume([]).length === 0, 'aucun kanji mangé : rien à montrer')
+const appris = resume([
+  { c: '水', fr: 'eau' },
+  { c: '猫', fr: 'chat' },
+  { c: '水', fr: 'eau' },
+  { c: '水', fr: 'eau' },
+])
+verifie(appris.length === 2, 'les doublons sont regroupés', `${appris.length}`)
+verifie(appris[0].c === '水' && appris[0].fois === 3, '水 compté 3 fois')
+verifie(appris[1].c === '猫' && appris[1].fois === 1, '猫 compté 1 fois')
+verifie(
+  appris.map((k) => k.c).join('') === '水猫',
+  'dans l’ordre où on les a rencontrés',
+  appris.map((k) => k.c).join(''),
+)
+verifie(appris.every((k) => k.fr), 'chacun garde sa traduction')
+verifie(resume([null, undefined, { fr: 'sans caractère' }]).length === 0, 'les entrées vides sont ignorées')
 
 console.log(echecs === 0 ? '\n✓ objets : tout est bon' : `\n✗ ${echecs} échec(s)`)
 process.exit(echecs === 0 ? 0 : 1)

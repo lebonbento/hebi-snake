@@ -72,6 +72,10 @@ vivent 7 secondes, clignotent de plus en plus vite sur la fin, puis s'en vont.
 Les 41 kanji sont dans `src/kanji.js` : un seul caractère chacun, parce qu'une
 case fait 15 à 20 px — 猫 y tient, ねこ non.
 
+À la fin de la partie, l'écran affiche **« TU AS APPRIS »** avec les kanji
+ramassés, regroupés et comptés. Sans ça, la traduction s'efface en une seconde
+et demie au milieu de l'action : joli, mais on n'en retient rien.
+
 ⚠️ Tous les gains doivent rester des **multiples de 10** : l'API rejette les
 scores qui n'en sont pas. Et le plafond de plausibilité (`SCORE_MAX`) tient
 compte des objets, sinon les bons scores seraient refusés en silence.

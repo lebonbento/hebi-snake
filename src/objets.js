@@ -64,6 +64,25 @@ export function opacite(objet, maintenant) {
 }
 
 /**
+ * Ce qu'on a appris pendant la partie : les kanji mangés, sans doublon, dans
+ * l'ordre où on les a rencontrés, avec le nombre de fois.
+ *
+ * La traduction qui monte à l'écran s'efface en une seconde et demie — au
+ * milieu de l'action, on ne retient rien. Ce récapitulatif est ce qui fait la
+ * différence entre un joli effet et quelque chose qui apprend.
+ */
+export function resume(manges) {
+  const vus = new Map()
+  for (const k of manges) {
+    if (!k?.c) continue
+    const deja = vus.get(k.c)
+    if (deja) deja.fois++
+    else vus.set(k.c, { c: k.c, fr: k.fr, fois: 1 })
+  }
+  return [...vus.values()]
+}
+
+/**
  * Ce que rapporte un objet. Renvoie les points gagnés, le nouveau compteur de
  * bouchées (la tortue le fait reculer) et le texte qui monte à l'écran.
  */

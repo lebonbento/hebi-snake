@@ -56,8 +56,12 @@ export const lirePlateau = (page) =>
       }
     }
 
+    // ⚠️ Seuil élevé exprès : les bords antialiasés du serpent laissent des
+    // miettes de 3 à 5 pixels juste derrière lui. Avec un seuil bas, le pilote
+    // les prenait pour des cibles — elles sont toujours les plus proches — et
+    // poursuivait sa propre queue sans jamais manger. Un emoji pèse 200+.
     const cibles = [...cases.entries()]
-      .filter(([, c]) => c >= 4)
+      .filter(([, c]) => c >= 40)
       .map(([k, c]) => {
         const [x, y] = k.split(',').map(Number)
         return { x, y, poids: c }
