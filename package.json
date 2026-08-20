@@ -13,6 +13,7 @@
     "test-classement": "node scripts/test-classement.mjs",
     "local": "node scripts/serveur-local.mjs",
     "test-parcours": "node scripts/test-parcours.mjs",
+    "test-joueurs": "node scripts/test-joueurs.mjs",
     "migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
     "test-objets": "node scripts/test-objets.mjs"
   },

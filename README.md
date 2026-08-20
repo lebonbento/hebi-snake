@@ -89,6 +89,28 @@ d'écrire un score sous le nom de quelqu'un d'autre. Il est stocké haché.
 Le nom n'est demandé qu'à la fin d'une partie **qui entre dans le top 20**,
 comme sur une borne. Le reste du temps on joue sans rien saisir.
 
+### Plusieurs joueurs sur le même téléphone
+
+Un téléphone de famille sert à deux enfants. L'appareil garde donc une **liste**
+de joueurs (`hebi-joueurs` dans `localStorage`), pas un seul compte : chacun a
+son nom, son code, **son record** et sa file d'attente. Le nom dans l'en-tête
+ouvre « QUI JOUE ? » : on bascule d'un tap, sans retaper le code — sur ce
+téléphone-là, la preuve a déjà été faite une fois. Le code n'est exigé que pour
+**ajouter** un joueur à l'appareil.
+
+Trois conséquences, et c'est tout l'intérêt :
+
+- le **record affiché suit le nom**, pas l'appareil — le petit frère n'hérite
+  plus du record du grand ;
+- un score fait hors-ligne est mis en attente **sur son auteur**, jamais réémis
+  au nom de celui qui joue ensuite ;
+- si une partie finit alors que personne n'est désigné, le jeu demande
+  « c'est qui ? » au lieu de deviner.
+
+Retirer un joueur ne touche ni son compte ni ses scores : il revient avec son
+code. Et le mode silence (🔊), lui, appartient à l'appareil — pas au joueur :
+c'est une propriété du lieu, il coupe le son **et la vibration**, et il est retenu.
+
 - `GET  /api/classement` → les 20 meilleurs + le record mondial
 - `POST /api/compte` → `{ action: 'creer' | 'retrouver', pseudo, code }`
 - `POST /api/score` → `{ pseudo, code, score }`, ne garde que le meilleur
@@ -125,6 +147,7 @@ npm run verifie <url>    # ... ou sur la prod
 npm run test-objets      # vitesse, objets rares, liste de kanji
 npm run test-classement  # logique du classement sur un vrai Postgres (PGlite)
 npm run test-parcours    # parcours joueur complet : jouer → mourir → nom → tableau
+npm run test-joueurs     # deux enfants, un téléphone : bascule, records, attribution
 npm run local            # dist/ + les routes /api sur un Postgres en mémoire
 ```
 
@@ -192,7 +215,8 @@ src/objets.js            règles des objets rares et de la vitesse (pures, testa
 src/kanji.js             les 41 kanji et leurs traductions
 src/Classement.jsx       le tableau des meilleurs scores
 src/SaisieNom.jsx        l'écran « ENTREZ VOTRE NOM »
-src/api.js               client du classement + file d'attente hors-ligne
+src/Joueurs.jsx          « QUI JOUE ? » : les joueurs de CE téléphone
+src/api.js               client du classement + joueurs de l'appareil + file d'attente
 src/InstallPrompt.jsx    encart « Installer l'app » (Android) / geste iOS
 src/index.css            Tailwind, @font-face, safe-areas, blocage du scroll
 vite.config.js           React + Tailwind v4 + vite-plugin-pwa (manifest inclus)

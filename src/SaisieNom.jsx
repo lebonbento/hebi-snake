@@ -7,10 +7,15 @@ const px = "'Press Start 2P', monospace"
  * L'écran de borne d'arcade : « ENTREZ VOTRE NOM ».
  *
  * Le code à 4 chiffres n'est pas un mot de passe, c'est ce qui permet de
- * retrouver son nom sur un autre appareil — et d'empêcher le petit frère
- * d'écrire des scores sous le nom du grand.
+ * retrouver son nom sur un autre appareil — et d'empêcher quelqu'un d'écrire
+ * des scores sous un nom qui n'est pas le sien.
+ *
+ * Deux usages, le même écran : à la fin d'une partie qui entre au tableau
+ * (`score` renseigné), et depuis « QUI JOUE ? » pour ajouter un deuxième
+ * joueur à ce téléphone (`score` absent).
  */
 export default function SaisieNom({ score, rang, onFini, onAnnule }) {
+  const ajout = score == null
   const [mode, setMode] = useState('nouveau') // nouveau | retour
   const [pseudo, setPseudo] = useState('')
   const [code, setCode] = useState('')
@@ -53,10 +58,18 @@ export default function SaisieNom({ score, rang, onFini, onAnnule }) {
       className="flex w-full max-w-xs flex-col items-center gap-4 text-center"
     >
       <div style={{ fontFamily: px, fontSize: 11, color: '#fbbf24', lineHeight: 1.6 }}>
-        {mode === 'retour' ? 'TON NOM' : 'NOUVEAU RECORD'}
+        {mode === 'retour' ? 'TON NOM' : ajout ? 'NOUVEAU JOUEUR' : 'NOUVEAU RECORD'}
       </div>
 
-      {mode === 'nouveau' && (
+      {mode === 'nouveau' && ajout && (
+        <p className="text-xs leading-snug" style={{ color: '#9aa1b8' }}>
+          Choisis un nom et un code à 4 chiffres.
+          <br />
+          Tu pourras changer de joueur d’un tap.
+        </p>
+      )}
+
+      {mode === 'nouveau' && !ajout && (
         <p className="text-xs" style={{ color: '#9aa1b8' }}>
           {rang ? `${score} points — ${rang}ᵉ au classement.` : `${score} points.`}
           <br />
@@ -138,7 +151,7 @@ export default function SaisieNom({ score, rang, onFini, onAnnule }) {
           {mode === 'retour' ? 'Créer un nouveau nom' : 'J’ai déjà un nom'}
         </button>
         <button type="button" onClick={onAnnule} className="active:text-white">
-          Plus tard
+          {ajout ? 'Annuler' : 'Plus tard'}
         </button>
       </div>
     </form>

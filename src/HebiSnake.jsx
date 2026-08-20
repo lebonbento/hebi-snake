@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Classement from "./Classement.jsx";
+import Joueurs from "./Joueurs.jsx";
 import SaisieNom from "./SaisieNom.jsx";
 import {
   BASE_SPEED,
@@ -18,7 +19,9 @@ import {
   envoyerScore,
   lireClassement,
   lireCompte,
-  oublierCompte,
+  listeJoueurs,
+  noterRecord,
+  recordLocal,
   scoreEnAttente,
   viderFile,
 } from "./api.js";
@@ -27,7 +30,8 @@ const TAILLE_CLASSEMENT = 20;
 
 /* ── HEBI 蛇 — le snake franco-japonais ──
    Swipe pour diriger · flèches / ZQSD · espace = pause
-   Record : localStorage ("hebi-best").
+   Record : par joueur, dans localStorage ("hebi-joueurs") — un téléphone de
+   famille sert à plusieurs enfants, le record suit le nom, pas l'appareil.
    Polices : Press Start 2P + Space Grotesk self-hostées via @font-face global. */
 
 const COLS = 17;
@@ -53,7 +57,9 @@ export default function HebiSnake() {
   const [chargeClassement, setChargeClassement] = useState(true);
   const [erreurClassement, setErreurClassement] = useState(false);
   const [voirClassement, setVoirClassement] = useState(false);
-  const [demandeNom, setDemandeNom] = useState(false);
+  const [voirJoueurs, setVoirJoueurs] = useState(null); // null | { titre, sousTitre }
+  const [demandeNom, setDemandeNom] = useState(null); // null | { score: number|null }
+  const [desJoueurs, setDesJoueurs] = useState(false); // ce téléphone connaît-il des joueurs ?
   const [rang, setRang] = useState(null);
   const [appris, setAppris] = useState([]); // les kanji de la partie qui vient de finir
 
@@ -112,7 +118,10 @@ export default function HebiSnake() {
       o.stop(a.currentTime + dur);
     } catch {}
   };
+  // Le mode silence coupe AUSSI la vibration : au lit ou en classe, un téléphone
+  // qui bourdonne dans une poche trahit autant qu'un bip.
   const vib = (ms) => {
+    if (mutedRef.current) return;
     try {
       if (navigator.vibrate) navigator.vibrate(ms);
     } catch {}
@@ -212,12 +221,8 @@ export default function HebiSnake() {
     tone(300, 60, 0.4, "sawtooth", 0.06);
     vib(80);
     if (scoreRef.current > bestRef.current) {
-      bestRef.current = scoreRef.current;
-      setBest(scoreRef.current);
       setNewBest(true);
-      try {
-        localStorage.setItem("hebi-best", String(scoreRef.current));
-      } catch {}
+      poserBest(noterRecord(scoreRef.current));
     }
   };
 
@@ -325,13 +330,21 @@ export default function HebiSnake() {
     timerRef.current = setTimeout(tick, speedRef.current);
   };
 
-  /* ── record persistant ── */
+  /* ── record persistant ──
+     Celui du joueur actif, ou celui de l'invité si personne n'est désigné. */
+  const poserBest = (v) => {
+    bestRef.current = v;
+    setBest(v);
+  };
+
   useEffect(() => {
+    poserBest(recordLocal());
     try {
-      const v = parseInt(localStorage.getItem("hebi-best") || "0", 10) || 0;
-      bestRef.current = v;
-      setBest(v);
+      const silence = localStorage.getItem("hebi-silence") === "1";
+      mutedRef.current = silence;
+      setMuted(silence);
     } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ── classement ──
@@ -351,8 +364,11 @@ export default function HebiSnake() {
     }
   }, []);
 
+  const majJoueurs = () => setDesJoueurs(listeJoueurs().length > 0);
+
   useEffect(() => {
     setCompte(lireCompte());
+    majJoueurs();
     rafraichirClassement();
     // Un score fait dans le métro part dès que le réseau revient.
     if (scoreEnAttente()) viderFile().then((j) => j && appliqueJoueur(j));
@@ -365,13 +381,7 @@ export default function HebiSnake() {
   const appliqueJoueur = (joueur) => {
     if (!joueur) return;
     // Le serveur fait autorité : il connaît aussi les parties des autres appareils.
-    if (joueur.record > bestRef.current) {
-      bestRef.current = joueur.record;
-      setBest(joueur.record);
-      try {
-        localStorage.setItem("hebi-best", String(joueur.record));
-      } catch {}
-    }
+    if (joueur.record > bestRef.current) poserBest(noterRecord(joueur.record));
     if (joueur.rang) setRang(joueur.rang);
   };
 
@@ -392,8 +402,15 @@ export default function HebiSnake() {
         if (abandonne) return;
         appliqueJoueur(joueur);
         rafraichirClassement();
+      } else if (listeJoueurs().length > 0) {
+        // Le téléphone connaît des joueurs mais personne n'est désigné : on ne
+        // devine pas, on demande. Un score n'entre au tableau qu'au bon nom.
+        setVoirJoueurs({
+          titre: "C’EST QUI ?",
+          sousTitre: `${s} points. À qui va ce score ?`,
+        });
       } else if (entreAuClassement(s)) {
-        setDemandeNom(true);
+        setDemandeNom({ score: s });
       }
     })();
     return () => {
@@ -403,11 +420,47 @@ export default function HebiSnake() {
   }, [phase]);
 
   const nomValide = async (joueur) => {
+    // Un nom ajouté depuis « QUI JOUE ? » hors partie n'hérite d'aucun score.
+    const s = demandeNom?.score ?? 0;
+    setDemandeNom(null);
     setCompte(lireCompte());
-    setDemandeNom(false);
+    majJoueurs();
+    setRang(null);
+    poserBest(recordLocal());
     appliqueJoueur(joueur);
-    appliqueJoueur(await envoyerScore(scoreRef.current));
+    if (s > 0) {
+      poserBest(noterRecord(s));
+      appliqueJoueur(await envoyerScore(s));
+    }
     rafraichirClassement();
+  };
+
+  /**
+   * On vient de basculer sur un joueur (ou sur « sans nom »).
+   * Le record affiché suit, et si la bascule répond à « c'est qui ? » le score
+   * de la partie qui vient de finir part sous CE nom-là.
+   */
+  const joueurChoisi = async (joueur) => {
+    const contexte = voirJoueurs;
+    setVoirJoueurs(null);
+    setCompte(lireCompte());
+    majJoueurs();
+    setRang(null);
+    poserBest(recordLocal());
+    if (!joueur) return; // « jouer sans nom » : rien à envoyer
+
+    const s = phaseRef.current === "over" && contexte?.sousTitre ? scoreRef.current : 0;
+    if (s > 0) {
+      poserBest(noterRecord(s));
+      setNewBest(s >= bestRef.current);
+    }
+    if (s > 0 || scoreEnAttente()) appliqueJoueur(await envoyerScore(s));
+    rafraichirClassement();
+  };
+
+  const ouvrirJoueurs = () => {
+    if (phaseRef.current === "play") pauseGame();
+    setVoirJoueurs({ titre: "QUI JOUE ?" });
   };
 
   const ouvrirClassement = () => {
@@ -661,9 +714,15 @@ export default function HebiSnake() {
     touchRef.current = { x: t.clientX, y: t.clientY };
   };
 
+  /* ── mode silence ──
+     Retenu sur l'appareil : c'est une propriété du lieu (la voiture, le lit),
+     pas du joueur. Il ne se redemande pas à chaque ouverture. */
   const toggleMute = () => {
     mutedRef.current = !mutedRef.current;
     setMuted(mutedRef.current);
+    try {
+      localStorage.setItem("hebi-silence", mutedRef.current ? "1" : "0");
+    } catch {}
   };
 
   /* ── UI ── */
@@ -732,22 +791,35 @@ export default function HebiSnake() {
               </div>
               {compte ? (
                 <button
-                  onClick={() => {
-                    oublierCompte();
-                    setCompte(null);
-                    setRang(null);
-                  }}
-                  title="Se déconnecter de ce nom"
+                  onClick={ouvrirJoueurs}
+                  title="Changer de joueur"
                   className="text-xs uppercase active:opacity-60"
                   style={{ color: "#a7f3d0" }}
                 >
                   {compte.pseudo}
-                  {rang ? ` · ${rang}ᵉ` : ""}
+                  {rang ? ` · ${rang}ᵉ` : ""} ▾
+                </button>
+              ) : desJoueurs ? (
+                <button
+                  onClick={ouvrirJoueurs}
+                  title="Choisir un joueur"
+                  className="text-xs uppercase active:opacity-60"
+                  style={{ color: "#7c8299" }}
+                >
+                  Qui joue ? ▾
                 </button>
               ) : (
-                <div className="text-xs" style={{ color: "#7c8299" }}>
+                // Même sur un téléphone vierge, on doit pouvoir s'inscrire AVANT
+                // de jouer : sinon la première partie de chacun part au nom de
+                // celui qui s'est inscrit le premier.
+                <button
+                  onClick={ouvrirJoueurs}
+                  title="Choisir un joueur"
+                  className="text-left text-xs active:opacity-60"
+                  style={{ color: "#7c8299" }}
+                >
                   « hé-bi » · le snake franco-japonais
-                </div>
+                </button>
               )}
             </div>
           </div>
@@ -761,7 +833,8 @@ export default function HebiSnake() {
               🏆
             </button>
             <button
-              aria-label={muted ? "Activer le son" : "Couper le son"}
+              aria-label={muted ? "Sortir du mode silence" : "Passer en mode silence"}
+              title={muted ? "Mode silence (son et vibration coupés)" : "Mode silence"}
               onClick={toggleMute}
               className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition"
               style={iconBtn}
@@ -968,13 +1041,37 @@ export default function HebiSnake() {
         >
           <div className="flex min-h-full items-center justify-center px-5 py-8">
             <SaisieNom
-              score={score}
-              rang={entreAuClassement(score) ? null : rang}
+              score={demandeNom.score}
+              rang={
+                demandeNom.score != null && entreAuClassement(demandeNom.score) ? null : rang
+              }
               onFini={nomValide}
-              onAnnule={() => setDemandeNom(false)}
+              onAnnule={() => setDemandeNom(null)}
             />
           </div>
         </div>
+      )}
+
+      {voirJoueurs && (
+        <Joueurs
+          titre={voirJoueurs.titre}
+          sousTitre={voirJoueurs.sousTitre}
+          onChoisi={joueurChoisi}
+          onAjouter={() => {
+            // Un nom créé depuis « c'est qui ? » hérite bien du score qui vient
+            // d'être fait ; ajouté au calme depuis l'accueil, il part de zéro.
+            const s =
+              phaseRef.current === "over" && voirJoueurs.sousTitre ? scoreRef.current : null;
+            setVoirJoueurs(null);
+            setDemandeNom({ score: s });
+          }}
+          onFermer={() => {
+            setVoirJoueurs(null);
+            majJoueurs();
+            setCompte(lireCompte());
+            poserBest(recordLocal());
+          }}
+        />
       )}
 
       {voirClassement && (
