@@ -2,9 +2,10 @@
  * Le classement est la SEULE chose qui a besoin du réseau. Tout ici doit
  * échouer en silence : une coupure ne doit jamais empêcher de jouer.
  *
- * Les scores faits hors-ligne sont mis de côté et réémis plus tard. Le serveur
- * ne garde que le meilleur, donc réémettre deux fois la même partie est sans
- * conséquence.
+ * Les parties faites hors-ligne sont mises de côté et réémises plus tard, TOUTES
+ * et dans l'ordre : le tableau garde chaque score, plus seulement le record.
+ * Chacune porte un identifiant tiré à sa fin, ce qui permet de la réémettre sans
+ * risquer de l'inscrire deux fois.
  *
  * ── Plusieurs joueurs sur le même téléphone ──
  * Un téléphone de famille sert à deux enfants. On garde donc une LISTE de
@@ -60,11 +61,14 @@ function etat() {
   const ancien = lire(CLE_ANCIENNE, null)
   if (ancien && ancien.pseudo && ancien.code) {
     const record = parseInt(localStorage.getItem(CLE_BEST) || '0', 10) || 0
-    // Un score fait dans le métro juste avant la mise à jour reste dû à son auteur.
-    const attente = Math.max(0, ...lire(CLE_FILE_ANCIENNE, []))
+    // Les parties faites dans le métro juste avant la mise à jour restent dues
+    // à leur auteur — toutes, l'ancienne file était déjà une liste de scores.
+    const file = lire(CLE_FILE_ANCIENNE, [])
+      .filter((s) => Number.isFinite(s) && s > 0)
+      .map((s) => ({ id: idPartie(), score: s }))
     const migre = {
       actif: norme(ancien.pseudo),
-      joueurs: [{ pseudo: ancien.pseudo, code: ancien.code, record, attente }],
+      joueurs: [{ pseudo: ancien.pseudo, code: ancien.code, record, file }],
     }
     ecrire(CLE, migre)
     try {
@@ -179,7 +183,7 @@ function retenir(joueur, code) {
     existant.code = code
     existant.record = Math.max(existant.record || 0, joueur.record || 0)
   } else {
-    e.joueurs.push({ pseudo: joueur.pseudo, code, record: joueur.record || 0, attente: 0 })
+    e.joueurs.push({ pseudo: joueur.pseudo, code, record: joueur.record || 0, file: [] })
   }
   e.actif = norme(joueur.pseudo)
   sauver(e)
@@ -228,9 +232,70 @@ export async function lireClassement() {
   return appel('/api/classement')
 }
 
+/** Nombre de parties gardées de côté au maximum : au-delà, on oublie les vieilles. */
+const MAX_FILE = 20
+
+/** Un identifiant tiré une fois par partie : c'est lui qui empêche les doublons. */
+function idPartie() {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  }
+}
+
 /**
- * Envoie un score. Si ça ne passe pas, le score est mis en attente SUR LE
- * JOUEUR concerné et retenté quand c'est lui qui joue — sinon le score du
+ * La file d'attente d'un joueur, sous sa forme actuelle : une LISTE de parties.
+ * Avant, c'était un seul nombre — le meilleur score en attente — parce que le
+ * serveur ne gardait que le record. Maintenant que chaque partie compte, on les
+ * garde toutes. Les anciennes files sont converties à la volée.
+ */
+function fileDe(joueur) {
+  if (Array.isArray(joueur.file)) return joueur.file.filter((x) => x && Number.isFinite(x.score))
+  const ancien = Number(joueur.attente || 0)
+  return ancien > 0 ? [{ id: idPartie(), score: ancien }] : []
+}
+
+/**
+ * Vide la file, dans l'ordre. Ce qui ne passe pas reste de côté ; ce que le
+ * serveur REFUSE (4xx) est jeté, réessayer n'y changerait rien.
+ * Renvoie le dernier joueur à jour, ou null si rien n'est passé.
+ */
+async function envoyerFile(e, moi, file) {
+  let dernier = null
+  while (file.length) {
+    const partie = file[0]
+    try {
+      const joueur = await appel('/api/score', {
+        method: 'POST',
+        body: JSON.stringify({
+          pseudo: moi.pseudo,
+          code: moi.code,
+          score: partie.score,
+          partie: partie.id,
+        }),
+      })
+      file.shift()
+      dernier = joueur
+      moi.record = Math.max(moi.record || 0, joueur.record || 0)
+    } catch (err) {
+      // 429 (trop d'essais) est temporaire : celui-là on le garde pour plus tard.
+      if (err.statut >= 400 && err.statut < 500 && err.statut !== 429) {
+        file.shift()
+        continue
+      }
+      break
+    }
+  }
+  moi.file = file
+  delete moi.attente
+  sauver(e)
+  return dernier
+}
+
+/**
+ * Envoie une partie. Si ça ne passe pas, elle est mise en attente SUR LE
+ * JOUEUR concerné et retentée quand c'est lui qui joue — sinon le score du
  * petit frère partirait au nom du grand.
  * Renvoie le joueur à jour, ou null si l'envoi n'a pas abouti.
  */
@@ -240,38 +305,28 @@ export async function envoyerScore(score) {
   const moi = e.joueurs.find((x) => norme(x.pseudo) === e.actif)
   if (!moi) return null
 
-  // On ne garde que le meilleur en attente : inutile de rejouer 40 parties.
-  const aEnvoyer = Math.max(score, moi.attente || 0, 0)
+  const file = fileDe(moi)
+  if (Number.isFinite(score) && score > 0) file.push({ id: idPartie(), score })
+  if (file.length > MAX_FILE) file.splice(0, file.length - MAX_FILE)
 
-  try {
-    const joueur = await appel('/api/score', {
-      method: 'POST',
-      body: JSON.stringify({ pseudo: moi.pseudo, code: moi.code, score: aEnvoyer }),
-    })
-    moi.attente = 0
-    moi.record = Math.max(moi.record || 0, joueur.record || 0)
-    sauver(e)
-    return joueur
-  } catch (err) {
-    // 4xx = le serveur a compris et refuse : réessayer n'y changera rien.
-    // Sauf 429 (trop d'essais), qui est temporaire : celui-là, on le garde.
-    if (err.statut >= 400 && err.statut < 500 && err.statut !== 429) return null
-    moi.attente = aEnvoyer
-    sauver(e)
-    return null
-  }
+  return envoyerFile(e, moi, file)
 }
 
-/** Le joueur actif a-t-il un score en attente d'être envoyé ? */
+/** Le joueur actif a-t-il des parties en attente d'être envoyées ? */
 export function scoreEnAttente() {
   const e = etat()
   if (!e.actif) return false
   const moi = e.joueurs.find((x) => norme(x.pseudo) === e.actif)
-  return !!(moi && moi.attente > 0)
+  return !!(moi && fileDe(moi).length > 0)
 }
 
 /** Vide la file du joueur actif, si le réseau est revenu. */
 export async function viderFile() {
-  if (!scoreEnAttente()) return null
-  return envoyerScore(0)
+  const e = etat()
+  if (!e.actif) return null
+  const moi = e.joueurs.find((x) => norme(x.pseudo) === e.actif)
+  if (!moi) return null
+  const file = fileDe(moi)
+  if (!file.length) return null
+  return envoyerFile(e, moi, file)
 }

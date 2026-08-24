@@ -33,3 +33,41 @@ create index if not exists joueurs_record_idx on joueurs (record desc, maj_le as
 -- un quart d'heure, ce qui porte l'attaque complète à des centaines d'heures.
 alter table joueurs add column if not exists echecs         integer     not null default 0;
 alter table joueurs add column if not exists bloque_jusqu_a timestamptz;
+
+-- ------------------------------------------------------------------
+-- Un joueur, PLUSIEURS scores.
+-- ------------------------------------------------------------------
+-- Avant, la table `joueurs` gardait le seul meilleur score de chacun : avec
+-- quatre comptes, un tableau de 20 lignes en affichait quatre. Chaque partie
+-- laisse maintenant sa ligne ici, et le tableau liste les 20 MEILLEURS SCORES
+-- — un même joueur peut donc en occuper plusieurs, comme sur une borne.
+-- `joueurs.record` reste tenu à jour : c'est le record personnel affiché en
+-- haut de l'écran, et il sert de repli si cette table est vide.
+create table if not exists scores (
+  id          bigint generated always as identity primary key,
+  pseudo_norm text        not null references joueurs (pseudo_norm) on delete cascade,
+  score       integer     not null,
+  -- Clé d'idempotence fournie par le client : une partie renvoyée deux fois
+  -- (file d'attente hors-ligne, réponse perdue) ne s'inscrit qu'une seule fois.
+  partie_id   text,
+  joue_le     timestamptz not null default now(),
+
+  constraint score_plausible check (score >= 0 and score <= 20000)
+);
+
+-- L'unicité ne porte que sur les clés réellement fournies : un vieux client
+-- qui n'en envoie pas doit continuer à marcher.
+create unique index if not exists scores_partie_id_idx on scores (partie_id) where partie_id is not null;
+
+-- Le classement, c'est cette requête : 20 meilleurs scores, à égalité le plus
+-- ancien devant.
+create index if not exists scores_meilleurs_idx on scores (score desc, joue_le asc);
+create index if not exists scores_joueur_idx    on scores (pseudo_norm, score desc);
+
+-- Les records déjà en base sont nés avant cette table : sans cette reprise ils
+-- disparaîtraient du tableau. `partie_id` rend la reprise rejouable.
+insert into scores (pseudo_norm, score, partie_id, joue_le)
+select pseudo_norm, record, 'record-repris:' || pseudo_norm, maj_le
+  from joueurs
+ where record > 0
+on conflict do nothing;

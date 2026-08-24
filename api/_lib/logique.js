@@ -156,43 +156,91 @@ export async function retrouverCompte(requete, { norm, code }) {
 }
 
 /**
- * On ne garde que le meilleur : renvoyer un score plus faible ne fait jamais
- * baisser le record. `greatest` rend l'appel rejouable sans risque, ce qui
- * compte parce que le client réémet les scores mis en attente hors-ligne.
+ * Fenêtre de tolérance pour un renvoi sans clé d'idempotence (vieux client).
+ * Le MÊME score, pour le MÊME joueur, à quelques minutes d'intervalle, c'est
+ * presque toujours la file d'attente hors-ligne qui réémet — pas deux parties.
  */
-export async function enregistrerScore(requete, { norm, code, score }) {
+const MINUTES_ANTI_DOUBLON = 10
+
+/**
+ * Enregistre UNE partie.
+ *
+ * Chaque partie qui rapporte des points laisse sa ligne dans `scores` : un même
+ * joueur peut donc occuper plusieurs places du tableau. `joueurs.record` reste
+ * tenu à jour (`greatest`) parce que c'est le record personnel affiché.
+ *
+ * ⚠️ Ce qui protégeait des doublons avant, c'était `greatest` : réémettre une
+ * partie ne changeait rien. Ce n'est plus vrai, une insertion s'ajoute. D'où la
+ * clé `partie` : le client la tire une fois par partie et la renvoie à chaque
+ * tentative, l'index unique fait le reste.
+ */
+export async function enregistrerScore(requete, { norm, code, score, partie }) {
   const acces = await verifierAcces(requete, { norm, code })
   if (!acces.ok) return acces
+
+  const cle = partie ? String(partie).slice(0, 64) : null
+
+  // Une partie à 0 ne laisse pas de ligne : elle n'a aucune chance d'entrer au
+  // tableau et ne ferait que gonfler la table.
+  let inscrite = score > 0
+  if (inscrite) {
+    const posees = await requete(
+      `insert into scores (pseudo_norm, score, partie_id)
+       select $1, $2, $3::text
+        where $3::text is not null
+           or not exists (select 1 from scores
+                           where pseudo_norm = $1
+                             and score = $2
+                             and joue_le > now() - ($4 || ' minutes')::interval)
+       on conflict do nothing
+       returning id`,
+      [norm, score, cle, String(MINUTES_ANTI_DOUBLON)],
+    )
+    inscrite = posees.length > 0
+  }
 
   const lignes = await requete(
     `update joueurs
         set record  = greatest(record, $2),
-            parties = parties + 1,
+            parties = parties + $3,
             maj_le  = now()
       where pseudo_norm = $1
       returning pseudo, record`,
-    [norm, score],
+    [norm, score, inscrite || score === 0 ? 1 : 0],
   )
-  return { ok: true, joueur: { pseudo: lignes[0].pseudo, record: lignes[0].record } }
+  return { ok: true, joueur: { pseudo: lignes[0].pseudo, record: lignes[0].record }, inscrite }
 }
 
+/**
+ * Les 20 meilleurs SCORES — pas les 20 meilleurs joueurs. Le même nom peut
+ * revenir plusieurs fois : c'est voulu, c'est un tableau de borne d'arcade.
+ *
+ * La colonne s'appelle toujours `record` dans la réponse : les applications
+ * déjà installées lisent ce nom-là, et le service worker peut servir un vieux
+ * fichier pendant des jours.
+ */
 export async function lireClassement(requete, limite = TAILLE_CLASSEMENT) {
   // À égalité, c'est celui qui l'a fait en premier qui passe devant.
   return requete(
-    `select pseudo, record
-       from joueurs
-      where record > 0
-      order by record desc, maj_le asc
+    `select j.pseudo, s.score as record, s.joue_le
+       from scores s
+       join joueurs j on j.pseudo_norm = s.pseudo_norm
+      where s.score > 0
+      order by s.score desc, s.joue_le asc
       limit $1`,
     [limite],
   )
 }
 
+/**
+ * Le rang, c'est la LIGNE du meilleur score du joueur dans le tableau : s'il
+ * occupe les trois premières places, il est premier.
+ */
 export async function lireRang(requete, norm) {
   const lignes = await requete(
     `select count(*) + 1 as rang
-       from joueurs
-      where record > (select record from joueurs where pseudo_norm = $1)`,
+       from scores
+      where score > coalesce((select max(score) from scores where pseudo_norm = $1), -1)`,
     [norm],
   )
   return lignes.length ? Number(lignes[0].rang) : null

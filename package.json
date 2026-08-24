@@ -15,7 +15,8 @@
     "test-parcours": "node scripts/test-parcours.mjs",
     "test-joueurs": "node scripts/test-joueurs.mjs",
     "migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs",
-    "test-objets": "node scripts/test-objets.mjs"
+    "test-objets": "node scripts/test-objets.mjs",
+    "test-scores": "node scripts/test-plusieurs-scores.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

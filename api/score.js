@@ -9,16 +9,16 @@ import {
 
 /**
  * POST /api/score
- *   { pseudo, code, score }
+ *   { pseudo, code, score, partie }
  *
- * Rejouable sans dommage : le serveur ne garde que le meilleur score, donc le
- * client peut réémettre une partie mise en attente pendant une coupure réseau
- * sans risquer de fausser quoi que ce soit.
+ * `partie` est la clé d'idempotence de CETTE partie-là : chaque partie laisse
+ * désormais sa ligne au tableau, donc réémettre une partie mise en attente
+ * pendant une coupure réseau doit l'inscrire UNE fois, pas deux.
  */
 export default async function handler(req, res) {
   if (refuse(req, res, 'POST')) return
 
-  const { pseudo, code, score } = corpsJson(req)
+  const { pseudo, code, score, partie } = corpsJson(req)
 
   const p = validerPseudo(pseudo)
   if (!p.ok) return json(res, 400, { erreur: p.erreur })
@@ -30,7 +30,12 @@ export default async function handler(req, res) {
   if (!s.ok) return json(res, 400, { erreur: s.erreur })
 
   try {
-    const resultat = await enregistrerScore(requete, { norm: p.norm, code, score: s.score })
+    const resultat = await enregistrerScore(requete, {
+      norm: p.norm,
+      code,
+      score: s.score,
+      partie,
+    })
     if (!resultat.ok) return json(res, resultat.code, { erreur: resultat.erreur })
 
     const rang = await lireRang(requete, p.norm)
